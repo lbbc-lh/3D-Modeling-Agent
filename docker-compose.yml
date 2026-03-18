@@ -1,0 +1,132 @@
+name: dialogue-agent
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  intent-service:
+    build:
+      context: .
+      dockerfile: train/Dockerfile.intent
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: intent-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8008:8008"
+
+  reject-service:
+    build:
+      context: .
+      dockerfile: train/Dockerfile.reject
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: reject-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8007:8007"
+
+  chatnlu-service:
+    build:
+      context: .
+      dockerfile: function_call/Dockerfile.chatnlu
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: chatnlu-service
+      INTENT_URL: http://intent-service:8008/intent-server/v1
+    depends_on:
+      intent-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8009:8009"
+
+  entry-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.start
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: entry-service
+      FLASK_SERVER_PORT: 8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REJECT_URL: http://reject-service:8007/reject-server/v1
+      NLU_URL: http://chatnlu-service:8009/chatnlu-server/v1
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      reject-service:
+        condition: service_healthy
+      chatnlu-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./log:/app/log
+
+  async-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    env_file:
+      - .env
+    environment:
+      SERVICE_NAME: async-consumer
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_QUEUE: async_log_tasks
+      ASYNC_LOG_FILE: /app/log/async_tasks.log
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./log:/app/log

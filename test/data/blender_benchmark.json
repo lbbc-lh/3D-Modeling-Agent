@@ -1,0 +1,23 @@
+[
+  {
+    "query": "创建一个红色立方体并渲染",
+    "accepted": true,
+    "expected_actions": [
+      "create_primitive",
+      "apply_material",
+      "render_scene"
+    ]
+  },
+  {
+    "query": "给场景加相机和灯光",
+    "accepted": true,
+    "expected_actions": [
+      "setup_camera_light"
+    ]
+  },
+  {
+    "query": "今天天气怎么样",
+    "accepted": false,
+    "expected_actions": []
+  }
+]

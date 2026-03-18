@@ -1,0 +1,23 @@
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app:/app/train
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/requirements/intent_reject.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir typing_extensions==4.13.2 \
+    && pip install --no-cache-dir torch==2.6.0 --extra-index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY . /app
+
+WORKDIR /app/train
+EXPOSE 8008
+CMD ["python", "intent_infer.py"]

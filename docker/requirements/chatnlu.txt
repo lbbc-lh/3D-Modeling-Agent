@@ -1,0 +1,8 @@
+fastapi==0.115.12
+uvicorn==0.34.1
+requests==2.32.3
+numpy==2.2.4
+openai==1.75.0
+mcp==1.7.0
+sinan==0.1.5
+qqmusic-api-python==0.3.4
